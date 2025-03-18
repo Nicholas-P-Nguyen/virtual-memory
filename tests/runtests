@@ -1,0 +1,8 @@
+#!/bin/bash
+
+testpath=$(pwd)
+projectpath=$(realpath "$(pwd)/../solution")
+echo "testpath: $testpath"
+echo "projectpath: $projectpath"
+python3 $testpath/run_tests.py --test-path $testpath --project-path $projectpath $@ | tee runtests.log
+
