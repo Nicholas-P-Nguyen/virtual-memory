@@ -78,6 +78,9 @@ trap(struct trapframe *tf)
     lapiceoi();
     break;
 
+  case T_PGFLT: 
+    handle_pageflt();
+
   //PAGEBREAK: 13
   default:
     if(myproc() == 0 || (tf->cs&3) == 0){
@@ -109,4 +112,28 @@ trap(struct trapframe *tf)
   // Check if the process has been killed since we yielded
   if(myproc() && myproc()->killed && (tf->cs&3) == DPL_USER)
     exit();
+}
+
+void handle_pageflt() {
+  uint pageflt_addr = rcr2();
+
+  struct proc *p = myproc();
+
+  for (int i = 0; i < p->wmap_count; i++) {
+    struct wmap_entry *wmap = &p->wmaps[i];
+    uint LOWER_BOUND = wmap->addr;
+    uint UPPER_BOUND = wmap->addr + wmap->length;
+    if (pageflt_addr >= LOWER_BOUND && pageflt_addr < UPPER_BOUND) {
+      char *page = kalloc();
+      if (page == 0) {
+        cprintf("Memory couldn't be allocated");
+        return;
+      }
+      
+
+      
+
+
+    }
+  }
 }

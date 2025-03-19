@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "random": "cpp",
+        "format": "cpp",
+        "type_traits": "cpp"
+    }
+}

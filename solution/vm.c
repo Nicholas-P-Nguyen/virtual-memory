@@ -6,6 +6,7 @@
 #include "mmu.h"
 #include "proc.h"
 #include "elf.h"
+#include "wmap.h"
 
 extern char data[];  // defined by kernel.ld
 pde_t *kpgdir;  // for use in scheduler()
@@ -383,6 +384,48 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
     va = va0 + PGSIZE;
   }
   return 0;
+}
+
+#define LOWER_BOUND 0x60000000
+#define UPPER_BOUND 0x80000000
+
+// addr: hints what virtual addr wmap should use or MUST use for mapping
+// length: length of the mapping in bytes
+// flags: The kind of memory mapping being requested.
+// fd: If file-backed mapping, this is the fd for the file to be mapped.
+uint
+wmap(uint addr, int length, int flags, int fd)
+{
+  struct proc *p = myproc();
+  // Validating length & maximum number of memory maps
+  if (length <= 0 || p->wmap_count > MAX_MAPS) {
+    return -1;
+  }
+  // MAP_SHARED & MAP_FIXED flag must always be set. 
+  if (!(flags & MAP_SHARED) || !(flags & MAP_FIXED)) {
+    return -1;
+  }
+  // Checking valid addr
+  if (addr < LOWER_BOUND || addr >= UPPER_BOUND || addr & PGSIZE != 0) {
+    return -1;
+  }
+
+  // Extracting the 32 bit virtual address
+  pte_t pg_dir = (addr >> 22) & 0x3FF;
+  pte_t pg_table = (addr >> 12) & 0x3FF;
+  pte_t offset = (addr) & 0xFFF;
+
+  p->wmaps[p->wmap_count].addr = addr;
+  p->wmaps[p->wmap_count].pg_dir = pg_dir;
+  p->wmaps[p->wmap_count].pg_table = pg_table;
+  p->wmaps[p->wmap_count].offset = offset;
+  p->wmaps[p->wmap_count].length = length;
+  p->wmaps[p->wmap_count].flags = flags;
+  p->wmaps[p->wmap_count].fd = fd;
+
+  p->wmap_count++;
+
+  return addr;
 }
 
 //PAGEBREAK!
