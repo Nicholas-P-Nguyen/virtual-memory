@@ -32,9 +32,19 @@ struct context {
   uint eip;
 };
 
-enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+struct wmap_entry {
+  pde_t pg_dir;
+  pte_t pg_table;
+  pte_t offset;
+  uint addr;
+  int length;
+  int flags;
+  int fd;
+  int num_pages;
+  struct file *f;
+};
 
-#define MAX_MAPS 16
+enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 // Per-process state
 struct proc {
@@ -52,19 +62,9 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
   int wmap_count;              // Count of mappings
-  struct wmap_entry wmaps[MAX_MAPS]; // Memory mappings
+  struct wmap_entry wmaps[16]; // Memory mappings
 };
 
-struct wmap_entry {
-  pte_t pg_dir;
-  pte_t pg_table;
-  pte_t offset;
-  uint addr;
-  int length;
-  int flags;
-  int fd;
-  struct file *f;
-};
 
 // Process memory is laid out contiguously, low addresses first:
 //   text

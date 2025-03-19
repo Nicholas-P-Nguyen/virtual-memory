@@ -33,7 +33,7 @@ seginit(void)
 // Return the address of the PTE in page table pgdir
 // that corresponds to virtual address va.  If alloc!=0,
 // create any required page table pages.
-static pte_t *
+pte_t *
 walkpgdir(pde_t *pgdir, const void *va, int alloc)
 {
   pde_t *pde;
@@ -58,7 +58,7 @@ walkpgdir(pde_t *pgdir, const void *va, int alloc)
 // Create PTEs for virtual addresses starting at va that refer to
 // physical addresses starting at pa. va and size might not
 // be page-aligned.
-static int
+int
 mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm)
 {
   char *a, *last;
@@ -398,7 +398,7 @@ wmap(uint addr, int length, int flags, int fd)
 {
   struct proc *p = myproc();
   // Validating length & maximum number of memory maps
-  if (length <= 0 || p->wmap_count > MAX_MAPS) {
+  if (length <= 0 || p->wmap_count >= 16) {
     return -1;
   }
   // MAP_SHARED & MAP_FIXED flag must always be set. 
@@ -406,27 +406,60 @@ wmap(uint addr, int length, int flags, int fd)
     return -1;
   }
   // Checking valid addr
-  if (addr < LOWER_BOUND || addr >= UPPER_BOUND || addr & PGSIZE != 0) {
+  if (addr < LOWER_BOUND || addr >= UPPER_BOUND || (addr % PGSIZE) != 0) {
     return -1;
   }
 
   // Extracting the 32 bit virtual address
-  pte_t pg_dir = (addr >> 22) & 0x3FF;
-  pte_t pg_table = (addr >> 12) & 0x3FF;
+  pde_t pg_dir = PDX(addr);
+  pte_t pg_table = PTX(addr);
   pte_t offset = (addr) & 0xFFF;
+  
+  int num_pages = PGROUNDUP(length) / PGSIZE;
 
+  // Checking for file-backed mapping
+  if (!(flags & MAP_ANONYMOUS)) {
+    // opening file with given fd
+    p->wmaps[p->wmap_count].f = p->ofile[fd];
+  } else {
+    p->wmaps[p->wmap_count].f = 0;
+  }
   p->wmaps[p->wmap_count].addr = addr;
   p->wmaps[p->wmap_count].pg_dir = pg_dir;
+  // TODO: delete pg_table & offset since i don't use it?
   p->wmaps[p->wmap_count].pg_table = pg_table;
   p->wmaps[p->wmap_count].offset = offset;
   p->wmaps[p->wmap_count].length = length;
   p->wmaps[p->wmap_count].flags = flags;
   p->wmaps[p->wmap_count].fd = fd;
+  p->wmaps[p->wmap_count].num_pages = num_pages;
 
   p->wmap_count++;
 
   return addr;
 }
+
+int
+wunmap(uint addr) 
+{
+  return 0;
+}
+
+uint 
+va2pa(uint va)
+{
+  return 0x100000;
+}
+
+int 
+getwmapinfo(struct wmapinfo *wminfo)
+{
+  if (!wminfo) return -1;  
+  
+  wminfo->total_mmaps = 0;  
+  return 0;
+}
+
 
 //PAGEBREAK!
 // Blank page.
