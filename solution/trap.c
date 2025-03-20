@@ -85,14 +85,19 @@ trap(struct trapframe *tf)
 
   case T_PGFLT: 
     uint pageflt_addr = rcr2();
-
     struct proc *p = myproc();
+
+    if (pageflt_addr >= KERNBASE) {
+      cprintf("Segmentation Fault\n");
+      kill(p->pid); 
+      return;
+  }
     // looping through wmap entries and locating page fault addr.
     for (int i = 0; i < p->wmap_count; i++) {
       struct wmap_entry *wmap = &p->wmaps[i];
-      uint LOWER_BOUND = wmap->addr;
-      uint UPPER_BOUND = wmap->addr + wmap->length;
-      if (pageflt_addr >= LOWER_BOUND && pageflt_addr < UPPER_BOUND) {
+      uint base = wmap->addr;
+      uint bound = wmap->addr + wmap->length;
+      if (pageflt_addr >= base && pageflt_addr < bound) {
 
         // found page fault addr, allocating memory for needed page frames
         for (int j = 0; j < wmap->num_pages; j++) {

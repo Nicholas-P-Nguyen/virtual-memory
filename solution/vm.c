@@ -399,15 +399,15 @@ wmap(uint addr, int length, int flags, int fd)
   struct proc *p = myproc();
   // Validating length & maximum number of memory maps
   if (length <= 0 || p->wmap_count >= 16) {
-    return -1;
+    return FAILED;
   }
   // MAP_SHARED & MAP_FIXED flag must always be set. 
   if (!(flags & MAP_SHARED) || !(flags & MAP_FIXED)) {
-    return -1;
+    return FAILED;
   }
   // Checking valid addr
   if (addr < LOWER_BOUND || addr >= UPPER_BOUND || (addr % PGSIZE) != 0) {
-    return -1;
+    return FAILED;
   }
 
   // Extracting the 32 bit virtual address
@@ -416,6 +416,17 @@ wmap(uint addr, int length, int flags, int fd)
   pte_t offset = (addr) & 0xFFF;
   
   int num_pages = PGROUNDUP(length) / PGSIZE;
+
+  // Checking for overlapping maps
+  for (int i = 0; i < p->wmap_count; i++) {
+    struct wmap_entry *wmap = &p->wmaps[i];
+    uint base = wmap->addr;
+    uint bound = wmap->addr + wmap->length;
+    if (addr >= base && addr < bound) {
+      cprintf("Overlapping maps not allowed\n");
+      return FAILED;
+    }
+  }
 
   // Checking for file-backed mapping
   if (!(flags & MAP_ANONYMOUS)) {
@@ -448,16 +459,35 @@ wunmap(uint addr)
 uint 
 va2pa(uint va)
 {
-  return 0x100000;
+  struct proc *p = myproc();
+
+  pte_t *pte = walkpgdir(p->pgdir, (void *)va, 0);
+  if (pte == 0 || (*pte & PTE_P) == 0) {
+    return FAILED;
+  }
+  
+  uint ppn = PTE_ADDR(*pte);
+  uint offset = va & (PGSIZE - 1);
+  return ppn + offset;
 }
+
 
 int 
 getwmapinfo(struct wmapinfo *wminfo)
 {
-  if (!wminfo) return -1;  
-  
-  wminfo->total_mmaps = 0;  
-  return 0;
+  struct proc *p = myproc();
+
+  wminfo->total_mmaps = 0;
+  for (int i = 0; i < p->wmap_count; i++) {
+    struct wmap_entry *wmap = &p->wmaps[i];
+
+    wminfo->total_mmaps++;
+    wminfo->addr[i] = wmap->addr;
+    wminfo->length[i] = wmap->length; 
+    wminfo->n_loaded_pages[i] = wmap->num_pages;
+  }
+
+  return SUCCESS;
 }
 
 
