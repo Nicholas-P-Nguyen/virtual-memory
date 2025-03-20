@@ -461,7 +461,7 @@ wunmap(uint addr)
 {
   struct proc *p = myproc();
 
-  // looping to find the mapping
+  // finding the mapping
   for (int i = 0; i < p->wmap_count; i++) {
     struct wmap_entry *wmap = &p->wmaps[i];
     // Checking if given addr is same as entry addr

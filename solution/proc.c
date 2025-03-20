@@ -6,6 +6,7 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include "wmap.h"
 
 struct {
   struct spinlock lock;
@@ -200,6 +201,16 @@ fork(void)
   np->parent = curproc;
   *np->tf = *curproc->tf;
 
+  // Copy wmap entries from parent to child
+  np->wmap_count = curproc->wmap_count;
+  for (int i = 0; i < curproc->wmap_count; i++) {
+      np->wmaps[i] = curproc->wmaps[i]; 
+
+      if (!(np->wmaps[i].flags & MAP_ANONYMOUS)) {
+          filedup(np->wmaps[i].f);
+      }
+  }
+  
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
 
