@@ -430,20 +430,24 @@ wmap(uint addr, int length, int flags, int fd)
 
   // Checking for file-backed mapping
   if (!(flags & MAP_ANONYMOUS)) {
+    if (fd < 0 || fd >= NOFILE || p->ofile[fd] == 0) {
+      return FAILED;
+    }
     // opening file with given fd
-    p->wmaps[p->wmap_count].f = p->ofile[fd];
+    p->wmaps[p->wmap_count].f = filedup(p->ofile[fd]);
   } else {
     p->wmaps[p->wmap_count].f = 0;
   }
   p->wmaps[p->wmap_count].addr = addr;
-  p->wmaps[p->wmap_count].pg_dir = pg_dir;
-  // TODO: delete pg_table & offset since i don't use it?
-  p->wmaps[p->wmap_count].pg_table = pg_table;
-  p->wmaps[p->wmap_count].offset = offset;
   p->wmaps[p->wmap_count].length = length;
   p->wmaps[p->wmap_count].flags = flags;
   p->wmaps[p->wmap_count].fd = fd;
   p->wmaps[p->wmap_count].num_pages = num_pages;
+  p->wmaps[p->wmap_count].num_pages_loaded = 0;
+  // TODO: delete pg_table & offset since i don't use it?
+  p->wmaps[p->wmap_count].pg_dir = pg_dir;
+  p->wmaps[p->wmap_count].pg_table = pg_table;
+  p->wmaps[p->wmap_count].offset = offset;
 
   p->wmap_count++;
 
@@ -484,7 +488,7 @@ getwmapinfo(struct wmapinfo *wminfo)
     wminfo->total_mmaps++;
     wminfo->addr[i] = wmap->addr;
     wminfo->length[i] = wmap->length; 
-    wminfo->n_loaded_pages[i] = wmap->num_pages;
+    wminfo->n_loaded_pages[i] = wmap->num_pages_loaded;
   }
 
   return SUCCESS;

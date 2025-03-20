@@ -41,6 +41,7 @@ struct wmap_entry {
   int flags;
   int fd;
   int num_pages;
+  int num_pages_loaded;
   struct file *f;
 };
 

@@ -8,6 +8,10 @@
 #include "traps.h"
 #include "spinlock.h"
 #include "wmap.h"
+#include "types.h"
+#include "sleeplock.h"
+#include "fs.h"
+#include "file.h" 
 
 extern int mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm);
 extern pte_t *walkpgdir(pde_t *pgdir, const void *va, int alloc);
@@ -84,6 +88,7 @@ trap(struct trapframe *tf)
     break;
 
   case T_PGFLT: 
+  {
     uint pageflt_addr = rcr2();
     struct proc *p = myproc();
 
@@ -91,43 +96,46 @@ trap(struct trapframe *tf)
       cprintf("Segmentation Fault\n");
       kill(p->pid); 
       return;
-  }
-    // looping through wmap entries and locating page fault addr.
+    }
+    // looping through wmap entries to locate page fault addr.
     for (int i = 0; i < p->wmap_count; i++) {
       struct wmap_entry *wmap = &p->wmaps[i];
       uint base = wmap->addr;
       uint bound = wmap->addr + wmap->length;
+
       if (pageflt_addr >= base && pageflt_addr < bound) {
-
-        // found page fault addr, allocating memory for needed page frames
-        for (int j = 0; j < wmap->num_pages; j++) {
-          // incrementing vaddr by j * 0x1000 (4096 bytes)
-          uint vaddr = wmap->addr + (j * PGSIZE);
-
-          // Allocate one 4096-byte page of physical memory.
-          char *page_frame = kalloc();
-          if (page_frame == 0) {
-            cprintf("Memory couldn't be allocated");
-            return;
-          }
-          // reading from file and storing it into allocated page frame
-          if (!(wmap->flags & MAP_ANONYMOUS)) {
-            fileread(wmap->f, page_frame, PGSIZE);
-          }
-          // mapping vaddr -> page_frame
-          int success = mappages(p->pgdir, (void *)vaddr, PGSIZE, V2P(page_frame), PTE_W | PTE_U);
-          if (success < 0) {
-            cprintf("Page mapping failed\n");
-            kfree(page_frame);
-            return;
-          }
+        
+        // Allocate one 4096-byte page of physical memory & setting to 0.
+        char *page_frame = kalloc();
+        memset(page_frame, 0, PGSIZE);
+        if (page_frame == 0) {
+          cprintf("Memory couldn't be allocated");
+          return;
         }
+        // For file-backed, reading from file and storing it into allocated page frame
+        if (!(wmap->flags & MAP_ANONYMOUS)) {
+          int file_offset = pageflt_addr - wmap->addr;
+          int old_off = wmap->f->off;
+          // Setting off to the file offset
+          wmap->f->off = file_offset;
+          fileread(wmap->f, page_frame, PGSIZE);
+          wmap->f->off = old_off;
+        }
+        // mapping vaddr -> page_frame
+        int success = mappages(p->pgdir, (void *)pageflt_addr, PGSIZE, V2P(page_frame), PTE_W | PTE_U);
+        if (success < 0) {
+          cprintf("Page mapping failed\n");
+          kfree(page_frame);
+          return;
+        }
+        wmap->num_pages_loaded++;
+
         return;
       }
     }
     cprintf("Segmentation Fault\n");
     kill(p->pid);
-
+  }
   //PAGEBREAK: 13
   default:
     if(myproc() == 0 || (tf->cs&3) == 0){
