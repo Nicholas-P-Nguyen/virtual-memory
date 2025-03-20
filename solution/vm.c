@@ -454,10 +454,48 @@ wmap(uint addr, int length, int flags, int fd)
   return addr;
 }
 
+// addr: the starting address to be removed. Must be page aligned
+//       and the start address of some existing wmap.
 int
 wunmap(uint addr) 
 {
-  return 0;
+  struct proc *p = myproc();
+
+  // looping to find the mapping
+  for (int i = 0; i < p->wmap_count; i++) {
+    struct wmap_entry *wmap = &p->wmaps[i];
+    // Checking if given addr is same as entry addr
+    if (wmap->addr == addr) {
+      // checking if file-backed, write pages back.
+      if (!(wmap->flags & MAP_ANONYMOUS)) {
+        for (int i = 0; i < wmap->num_pages; i++) {
+          uint vaddr = wmap->addr + i * PGSIZE;
+          pte_t *pte = walkpgdir(p->pgdir, (void *)vaddr, 0);
+          if (pte && (*pte & PTE_P)) {
+            filewrite(wmap->f, (char *)vaddr, PGSIZE);
+          }
+        }
+      }
+      // unmapping each page
+      for (int i = 0; i < wmap->num_pages; i++) {
+        uint vaddr = wmap->addr + i * PGSIZE;
+        pte_t *pte = walkpgdir(p->pgdir, (void *)vaddr, 0);
+        if (pte && (*pte & PTE_P)) {
+          uint paddr = PTE_ADDR(*pte);
+          *pte = 0;
+          kfree(P2V(paddr));
+        }
+      }
+      int entry_index = i;
+      // removing mapping
+      for (int i = entry_index; i < p-> wmap_count; i++) {
+        p->wmaps[i] = p->wmaps[i + 1]; 
+      }
+      p->wmap_count--;
+      return SUCCESS;
+    }
+  }
+  return FAILED;
 }
 
 uint 
